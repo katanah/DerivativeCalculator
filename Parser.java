@@ -10,9 +10,36 @@ public class Parser {
     private List<String> termsAndOperators;
     private SyntaxTree syntaxTree;
     private String variable;
+    private final String DEAFULT_COEFFICIENT = "1";
+
+    private class Term {
+        private String variable;
+        private double coefficient;
+
+        public Term(String variable, double coefficient) {
+            this.variable = variable;
+            this.coefficient = coefficient;
+        }
+
+        public String getVariable() {
+            return variable;
+        }
+
+        public void setVariable(String variable) {
+            this.variable = variable;
+        }
+
+        public double getCoefficient() {
+            return coefficient;
+        }
+
+        public void setCoefficient(double coefficient) {
+            this.coefficient = coefficient;
+        }
+    }
 
     public Parser(String expression, String variable) {
-        this.expression = expression;
+        this.expression = expression.replaceAll("\\s", "");
         this.variable = variable;
         this.termsAndOperators = initTerms(this.expression);
         // initTerms(this.expression);
@@ -29,7 +56,7 @@ public class Parser {
         return new ArrayList<>();
     }
 
-    public List<String> initTerms(String expression) {
+    private List<String> initTerms(String expression) {
         String[] terms = expression.split("(?<=[+-/*])");
         List<String> splitExpression = new ArrayList<String>();
 
@@ -46,10 +73,6 @@ public class Parser {
                 splitExpression.add(subterm);
             }
         }
-
-        if (splitExpression.get(0) == "+") {
-            splitExpression.remove(0);
-        }
     }
 
     private List<String> splitTerms(List<String> terms) {
@@ -65,38 +88,22 @@ public class Parser {
         return splitTerms;
     }
 
-    // TODO: this function elimates terms if it contains a variable other than
-    // this.variable otherwise
-    private List<String> combineLikeTerms(List<String> terms) {
-        HashMap<String, String> likeTerms = new HashMap<String, String>(); // var, coeff
-        double constantSum = 0;
-
-        for (int i = 0; i < terms.size(); i++) {
-            String term = terms.get(i);
-            String coefficient = "";
-            String variable = "";
-
-            if (term.contains(this.variable)) {
-                if (term.indexOf(this.variable) != 0) {
-                    String[] coeffAndVar = term.split("(?=[" + this.variable + "])");
-                    coefficient = checkSign(terms, term, i) + coeffAndVar[0];
-                    variable = coeffAndVar[1];
-                    addHashMapElement(likeTerms, variable, coefficient);
-                } else {
-                    coefficient = checkSign(terms, term, i) + "1";
-                    variable = term;
-                    addHashMapElement(likeTerms, variable, coefficient);
-                }
-            } else if (term.matches("\\d+")) {
-                String currentTerm = checkSign(terms, term, i) + term;
-                constantSum += Double.parseDouble(currentTerm);
-            }
-
+    private Term parseTerm(String term, String sign) {
+        if (term.indexOf(this.variable) != 0) {
+            String[] coefficientAndVariable = term.split("(?=[" + this.variable + "])");
+            String coefficient = sign + coefficientAndVariable[0];
+            String variable = coefficientAndVariable[1];
+            return new Term(variable, Double.parseDouble(coefficient));
+        } else {
+            String coefficient = sign + DEAFULT_COEFFICIENT;
+            return new Term(term, Double.parseDouble(coefficient));
         }
+    }
 
+    private List<String> updateTerms(HashMap<String, Double> hmap, double constantSum, List<String> terms) {
         terms.clear();
 
-        for (Map.Entry<String, String> entry : likeTerms.entrySet()) {
+        for (Map.Entry<String, Double> entry : hmap.entrySet()) {
             String term = entry.getValue() + entry.getKey();
 
             if (Character.isLetterOrDigit(term.charAt(0))) {
@@ -114,34 +121,36 @@ public class Parser {
 
             terms.add(constant);
         }
-
         return splitTerms(terms);
     }
 
-    private void parseTerm(String term) {
+    // TODO: this function elimates terms if it contains a variable other than
+    // this.variable otherwise
+    private List<String> combineLikeTerms(List<String> terms) {
+        HashMap<String, Double> likeTerms = new HashMap<String, Double>(); // var, coeff
+        double constantSum = 0;
 
+        for (int i = 0; i < terms.size(); i++) {
+            String term = terms.get(i);
+            if (term.contains(this.variable)) {
+                Term parsedTerm = parseTerm(term, checkSign(terms, term, i));
+                addHashMapElement(likeTerms, parsedTerm);
+            } else if (term.matches("\\d+")) {
+                String currentConstant = checkSign(terms, term, i) + term;
+                constantSum += Double.parseDouble(currentConstant);
+            } else {
+                continue;
+            }
+        }
+
+        return updateTerms(likeTerms, constantSum, terms);
     }
 
-    private void addHashMapElement(HashMap<String, String> hmap, String key, String value) {
-        if (!hmap.containsKey(key)) {
-            hmap.put(key, value);
-        } else {
-            double currentValue = Double.parseDouble(hmap.get(key));
-            currentValue += Double.parseDouble(value);
+    private void addHashMapElement(HashMap<String, Double> hmap, Term currentTerm) {
+        String key = currentTerm.getVariable();
+        double value = currentTerm.getCoefficient();
 
-            hmap.replace(key, Double.toString(currentValue));
-        }
-    }
-
-    private void addHashMapElement(HashMap<String, Double> hmap, List<Object> coefficientAndVariable) {
-        String key = coefficientAndVariable.get(1);
-        double value = Double.parscoefficientAndVariable.get(0);
-
-        if (!hmap.containsKey(key)) {
-            hmap.put(key, value);
-        } else {
-
-        }
+        hmap.merge(key, value, Double::sum);
     }
 
     private String checkSign(List<String> terms, String term, int index) {
@@ -172,5 +181,4 @@ public class Parser {
 
         Parser p = new Parser(expression, "x");
     }
-
 }
